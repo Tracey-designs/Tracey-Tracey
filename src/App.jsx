@@ -374,4 +374,325 @@ export default function App() {
     // check badges
     const newStats = computeStats(updated);
     for (const badge of BADGES) {
-      const had
+      const hadIt = BADGES.filter(b => b.check(stats)).map(b => b.id).includes(badge.id);
+      if (!hadIt && badge.check(newStats)) {
+        setNewBadge(badge);
+        setTimeout(() => setNewBadge(null), 3500);
+      }
+    }
+
+    // confetti on full completion
+    const allHab = HABITS.every(h => (newToday[h.id] || 0) >= h.target);
+    const allMed = MEDS.every(m => newToday[m.id]);
+    if (allHab && allMed) { setConfetti(true); setTimeout(() => setConfetti(false), 4000); }
+  };
+
+  const setVal = (id, val) => save({ ...todayData, [id]: val });
+  const toggleMed = (id) => save({ ...todayData, [id]: !todayData[id] });
+
+  const todayPts = todayData.points || 0;
+  const level = getLevel(stats.totalPoints);
+  const nextLevel = getNextLevel(stats.totalPoints);
+  const lvlPct = nextLevel
+    ? Math.round(((stats.totalPoints - level.min) / (nextLevel.min - level.min)) * 100)
+    : 100;
+
+  const completedHabits = HABITS.filter(h => (todayData[h.id] || 0) >= h.target).length;
+  const completedMeds = MEDS.filter(m => todayData[m.id]).length;
+  const allDone = completedHabits === HABITS.length && completedMeds === MEDS.length;
+  const earnedBadges = BADGES.filter(b => b.check(stats));
+
+  // rotate 3 edu cards starting from today's index
+  const eduCards = [0, 1, 2].map(i => EDUCATION[(eduIdx + i) % EDUCATION.length]);
+
+  return (
+    <div style={{
+      minHeight: "100vh",
+      background: "linear-gradient(160deg, #fdf6ec 0%, #fef9f0 100%)",
+      fontFamily: "'Sora', 'Segoe UI', sans-serif",
+      maxWidth: "430px", margin: "0 auto",
+    }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,700;0,900;1,700&family=Sora:wght@400;600;700;800;900&display=swap');
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        @keyframes confettiFall { 0%{transform:translateY(-20px) rotate(0deg);opacity:1} 100%{transform:translateY(110vh) rotate(720deg);opacity:0} }
+        @keyframes slideUp { from{transform:translateY(16px);opacity:0} to{transform:translateY(0);opacity:1} }
+        @keyframes badgePop { 0%{transform:translateY(40px) scale(0.8);opacity:0} 60%{transform:translateY(-4px) scale(1.05)} 100%{transform:translateY(0) scale(1);opacity:1} }
+        @keyframes shimmer { 0%,100%{opacity:1} 50%{opacity:0.6} }
+      `}</style>
+
+      {/* Confetti */}
+      {confetti && (
+        <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 999, overflow: "hidden" }}>
+          {Array.from({ length: 45 }).map((_, i) => (
+            <div key={i} style={{
+              position: "absolute", left: `${Math.random() * 100}%`, top: "-30px",
+              fontSize: `${0.9 + Math.random() * 1.3}rem`,
+              animation: `confettiFall ${2 + Math.random() * 2.5}s ease-in forwards`,
+              animationDelay: `${Math.random() * 1.2}s`,
+            }}>
+              {["🎉","👑","💛","🔥","✨","💅","🌟","💐","🥂","💪","🧡","💊"][Math.floor(Math.random() * 12)]}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Badge toast */}
+      {newBadge && (
+        <div style={{
+          position: "fixed", bottom: "80px", left: "50%", transform: "translateX(-50%)",
+          background: "linear-gradient(135deg, #92400e, #d97206)",
+          color: "#fef3c7", borderRadius: "20px", padding: "14px 22px",
+          boxShadow: "0 8px 32px #92400e66", zIndex: 998, minWidth: "240px",
+          textAlign: "center", animation: "badgePop 0.5s ease",
+        }}>
+          <div style={{ fontSize: "2rem", marginBottom: "4px" }}>{newBadge.emoji}</div>
+          <div style={{ fontWeight: 900, fontSize: "0.9rem" }}>Badge Unlocked!</div>
+          <div style={{ fontSize: "0.8rem", opacity: 0.85 }}>{newBadge.label} — {newBadge.desc}</div>
+        </div>
+      )}
+
+      {/* Hero header */}
+      <div style={{
+        background: "linear-gradient(135deg, #92400e 0%, #b45309 40%, #d97206 100%)",
+        padding: "32px 22px 24px", position: "relative", overflow: "hidden",
+      }}>
+        <div style={{ position: "absolute", top: "-40px", right: "-40px", width: "150px", height: "150px", background: "#f59e0b22", borderRadius: "50%" }} />
+        <div style={{ position: "absolute", bottom: "-30px", left: "-20px", width: "110px", height: "110px", background: "#ffffff11", borderRadius: "50%" }} />
+
+        <div style={{ fontSize: "0.62rem", letterSpacing: "0.2em", color: "#fcd34d", fontWeight: 800, textTransform: "uppercase", marginBottom: "8px", position: "relative" }}>
+          ✦ Tracey Tracey's Daily ✦
+        </div>
+        <h1 style={{
+          fontFamily: "'Fraunces', Georgia, serif",
+          fontSize: "2.3rem", fontWeight: 900, color: "#fffbeb",
+          lineHeight: 1.05, letterSpacing: "-0.02em", marginBottom: "14px", position: "relative",
+        }}>
+          {allDone ? "YOU DID THAT. 👑" : "We're Building, Sis."}
+        </h1>
+
+        {/* Level + points row */}
+        <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", position: "relative", marginBottom: "10px" }}>
+          <div style={{ background: "#ffffff22", borderRadius: "99px", padding: "5px 14px", fontSize: "0.73rem", color: "#fef3c7", fontWeight: 700 }}>
+            {level.emoji} {level.name}
+          </div>
+          <div style={{ background: "#f59e0b", borderRadius: "99px", padding: "5px 14px", fontSize: "0.73rem", color: "#78350f", fontWeight: 800 }}>
+            ⭐ {stats.totalPoints} pts total
+          </div>
+          {stats.streak > 0 && (
+            <div style={{ background: "#ef4444", borderRadius: "99px", padding: "5px 14px", fontSize: "0.73rem", color: "#fff", fontWeight: 800 }}>
+              🔥 {stats.streak} day{stats.streak !== 1 ? "s" : ""}
+            </div>
+          )}
+        </div>
+
+        {/* Level progress bar */}
+        {nextLevel && (
+          <div style={{ position: "relative" }}>
+            <div style={{ background: "#ffffff22", borderRadius: "99px", height: "6px", overflow: "hidden" }}>
+              <div style={{ background: "#fcd34d", height: "100%", width: `${lvlPct}%`, borderRadius: "99px", transition: "width 0.6s ease" }} />
+            </div>
+            <div style={{ color: "#fcd34d88", fontSize: "0.62rem", marginTop: "4px", textAlign: "right" }}>
+              {stats.totalPoints} / {nextLevel.min} → {nextLevel.emoji} {nextLevel.name}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display: "flex", background: "#fff", borderBottom: "2px solid #f0e6d3" }}>
+        {TABS.map(t => (
+          <button key={t} onClick={() => setTab(t)} style={{
+            flex: 1, padding: "13px 0",
+            background: "none", border: "none",
+            borderBottom: tab === t ? "3px solid #d97206" : "3px solid transparent",
+            color: tab === t ? "#d97206" : "#c4a882",
+            fontWeight: tab === t ? 800 : 600,
+            fontSize: "0.82rem", cursor: "pointer",
+            fontFamily: "'Sora', sans-serif",
+            transition: "all 0.2s",
+          }}>{t}</button>
+        ))}
+      </div>
+
+      <div style={{ padding: "18px 16px 48px" }}>
+
+        {/* ── TODAY TAB ── */}
+        {tab === "Today" && (
+          <div style={{ animation: "slideUp 0.35s ease" }}>
+
+            {/* Today's points */}
+            <div style={{
+              background: "#fff", border: "2px solid #f0e6d3",
+              borderRadius: "18px", padding: "14px 18px",
+              display: "flex", justifyContent: "space-between", alignItems: "center",
+              marginBottom: "16px", boxShadow: "0 2px 8px #d9722611",
+            }}>
+              <div>
+                <div style={{ color: "#9a7c65", fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>Today's Points</div>
+                <div style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: "1.6rem", fontWeight: 900, color: "#d97206", lineHeight: 1 }}>
+                  {todayPts} <span style={{ fontSize: "0.9rem", color: "#c4a882" }}>pts</span>
+                </div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ color: "#9a7c65", fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>Habits + Meds</div>
+                <div style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: "1.3rem", fontWeight: 900, color: "#2c1a0e" }}>
+                  {completedHabits + completedMeds}/{HABITS.length + MEDS.length}
+                </div>
+              </div>
+            </div>
+
+            {/* Meds section */}
+            <div style={{ marginBottom: "20px" }}>
+              <div style={{ color: "#c4a882", fontSize: "0.68rem", fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "10px" }}>
+                💊 Diabetes Meds — Non-Negotiable
+              </div>
+              <div style={{ display: "flex", gap: "10px" }}>
+                {MEDS.map(m => (
+                  <MedCard key={m.id} med={m} taken={!!todayData[m.id]} onToggle={() => toggleMed(m.id)} />
+                ))}
+              </div>
+              {completedMeds < MEDS.length && (
+                <div style={{
+                  marginTop: "10px", background: "#fef2f2", border: "1px solid #fca5a5",
+                  borderRadius: "12px", padding: "9px 14px",
+                  color: "#991b1b", fontSize: "0.75rem", fontWeight: 600, lineHeight: 1.4,
+                }}>
+                  ⚠️ Meds not logged yet today. These are the foundation — everything else works better with them.
+                </div>
+              )}
+            </div>
+
+            {/* Quote */}
+            <div style={{ textAlign: "center", color: "#b45309", fontSize: "0.76rem", marginBottom: "16px", fontStyle: "italic", fontFamily: "'Fraunces', Georgia, serif", padding: "0 8px", opacity: 0.85 }}>
+              "{KELLI_QUOTES[quoteIdx]}"
+            </div>
+
+            {/* Habits */}
+            <div style={{ color: "#c4a882", fontSize: "0.68rem", fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "10px" }}>
+              🌿 Daily Habits
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "18px" }}>
+              {HABITS.map(h => (
+                <HabitCard key={h.id} habit={h} value={todayData[h.id] || 0} onChange={val => setVal(h.id, val)} />
+              ))}
+            </div>
+
+            <KelliCoach todayData={todayData} streak={stats.streak} />
+          </div>
+        )}
+
+        {/* ── PROGRESS TAB ── */}
+        {tab === "Progress" && (
+          <div style={{ animation: "slideUp 0.35s ease" }}>
+
+            {/* Stats grid */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginBottom: "20px" }}>
+              {[
+                { label: "Total Points", value: stats.totalPoints, emoji: "⭐", color: "#d97206" },
+                { label: "Current Streak", value: `${stats.streak}d`, emoji: "🔥", color: "#ef4444" },
+                { label: "Med Days", value: stats.totalMedDays, emoji: "💊", color: "#a78bfa" },
+                { label: "Full Days", value: stats.fullDays, emoji: "🎯", color: "#34d399" },
+              ].map(s => (
+                <div key={s.label} style={{
+                  background: "#fff", border: "2px solid #f0e6d3",
+                  borderRadius: "16px", padding: "16px",
+                  boxShadow: "0 2px 8px #d9722611",
+                }}>
+                  <div style={{ fontSize: "1.6rem", marginBottom: "4px" }}>{s.emoji}</div>
+                  <div style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: "1.6rem", fontWeight: 900, color: s.color, lineHeight: 1 }}>{s.value}</div>
+                  <div style={{ color: "#9a7c65", fontSize: "0.7rem", marginTop: "3px" }}>{s.label}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* 7-day bar */}
+            <div style={{ background: "#fff", border: "2px solid #f0e6d3", borderRadius: "18px", padding: "18px", marginBottom: "20px" }}>
+              <div style={{ color: "#c4a882", fontSize: "0.68rem", fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "14px" }}>The Week So Far</div>
+              <div style={{ display: "flex", gap: "8px" }}>
+                {Array.from({ length: 7 }).map((_, i) => {
+                  const d = new Date(); d.setDate(d.getDate() - (6 - i));
+                  const k = d.toISOString().split("T")[0];
+                  const dd = allData[k] || {};
+                  const hab = HABITS.filter(h => (dd[h.id] || 0) >= h.target).length;
+                  const med = MEDS.filter(m => dd[m.id]).length;
+                  const total = hab + med;
+                  const max = HABITS.length + MEDS.length;
+                  const isToday = k === today;
+                  return (
+                    <div key={i} style={{ flex: 1, textAlign: "center" }}>
+                      <div style={{
+                        height: "52px", borderRadius: "10px",
+                        background: total === 0 ? "#fef3e8"
+                          : total === max ? "linear-gradient(180deg, #f59e0b, #d97206)"
+                          : `linear-gradient(to top, #d97206 ${(total / max) * 100}%, #fef3e8 0%)`,
+                        border: isToday ? "2.5px solid #d97206" : "2px solid #f0e6d3",
+                        marginBottom: "5px",
+                        boxShadow: total === max ? "0 4px 12px #d9720644" : "none",
+                        transition: "all 0.3s",
+                      }} />
+                      <div style={{ color: isToday ? "#d97206" : "#c4a882", fontSize: "0.62rem", fontWeight: isToday ? 800 : 400 }}>
+                        {d.toLocaleDateString("en-US", { weekday: "narrow" })}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Badges */}
+            <div style={{ color: "#c4a882", fontSize: "0.68rem", fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", marginBottom: "12px" }}>
+              🏅 Badges ({earnedBadges.length}/{BADGES.length})
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+              {BADGES.map(b => {
+                const earned = b.check(stats);
+                return (
+                  <div key={b.id} style={{
+                    background: earned ? "linear-gradient(135deg, #fffbeb, #fef3c7)" : "#fff",
+                    border: `2px solid ${earned ? "#f59e0b" : "#f0e6d3"}`,
+                    borderRadius: "14px", padding: "14px",
+                    opacity: earned ? 1 : 0.5,
+                    transition: "all 0.3s",
+                    boxShadow: earned ? "0 4px 14px #f59e0b22" : "none",
+                  }}>
+                    <div style={{ fontSize: "1.5rem", marginBottom: "5px", filter: earned ? "none" : "grayscale(1)" }}>{b.emoji}</div>
+                    <div style={{ fontWeight: 800, fontSize: "0.8rem", color: earned ? "#78350f" : "#9a7c65", marginBottom: "2px" }}>{b.label}</div>
+                    <div style={{ color: earned ? "#b45309" : "#c4a882", fontSize: "0.68rem" }}>{b.desc}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ── LEARN TAB ── */}
+        {tab === "Learn" && (
+          <div style={{ animation: "slideUp 0.35s ease" }}>
+            <div style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: "1.1rem", fontWeight: 700, color: "#78350f", marginBottom: "6px" }}>
+              Know your body, Tracey Tracey. 🧠
+            </div>
+            <div style={{ color: "#9a7c65", fontSize: "0.78rem", marginBottom: "20px", lineHeight: 1.5 }}>
+              Real talk on diabetes, ADHD, and why your habits actually matter. Tap any card to read more.
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+              {eduCards.map((card, i) => <EducationCard key={i} card={card} />)}
+            </div>
+            <div style={{ marginTop: "20px", background: "#fff", border: "2px solid #f0e6d3", borderRadius: "18px", padding: "16px 18px" }}>
+              <div style={{ fontFamily: "'Fraunces', Georgia, serif", fontWeight: 700, color: "#78350f", marginBottom: "6px", fontSize: "0.95rem" }}>
+                📌 Always remember
+              </div>
+              <div style={{ color: "#9a7c65", fontSize: "0.78rem", lineHeight: 1.6 }}>
+                This app supports your journey but isn't medical advice. Keep talking to your doctor, track your numbers, and bring your questions to your appointments. You knowing more = better conversations with your care team.
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div style={{ textAlign: "center", color: "#d4b896", fontSize: "0.7rem", paddingBottom: "20px", fontFamily: "'Fraunces', Georgia, serif", fontStyle: "italic" }}>
+        Made for Tracey Tracey. With love. 🧡
+      </div>
+    </div>
+  );
+}
